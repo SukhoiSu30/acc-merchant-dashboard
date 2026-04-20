@@ -334,7 +334,7 @@ function Sidebar({ current, onNavigate, onLogout }) {
           padding: 12, background: "rgba(255,255,255,0.06)", borderRadius: 8,
           marginBottom: 10,
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Prat Sharma</div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>VM</div>
           <div style={{ fontSize: 10, opacity: 0.6 }}>Merchant Admin</div>
         </div>
         <button
