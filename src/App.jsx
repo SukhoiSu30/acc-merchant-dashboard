@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 const BRAND = {
-  name: "ACC Payments",
+  name: "ACC Merchants",
   tagline: "Applied Cloud Computing",
   primary: "#0F2A4A",
   primaryLight: "#1E4976",
