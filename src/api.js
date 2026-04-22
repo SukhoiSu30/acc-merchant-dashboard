@@ -1,15 +1,30 @@
 // src/api.js
-// All backend API calls live in this one file.
-// If the backend URL ever changes, you only update one place.
+// All backend API calls — with Clerk auth token attached to every request.
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api';
 
-// Helper: wrap fetch with error handling
+// The token getter is set externally (from App.jsx) once Clerk is ready
+let getTokenFn = null;
+
+export function setTokenGetter(fn) {
+  getTokenFn = fn;
+}
+
 async function apiFetch(path, options = {}) {
   const url = `${API_BASE}${path}`;
+
+  // Get the auth token from Clerk
+  const token = getTokenFn ? await getTokenFn() : null;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
 
   if (!res.ok) {

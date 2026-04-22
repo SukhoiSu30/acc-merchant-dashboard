@@ -5,14 +5,17 @@ import {
 } from "recharts";
 import {
   LayoutDashboard, Receipt, RefreshCw, Banknote, Users, Settings,
-  FileText, LogOut, Search, Download, TrendingUp, TrendingDown,
+  FileText, Search, Download, TrendingUp, TrendingDown,
   CheckCircle2, XCircle, Clock, CreditCard, Smartphone,
-  Wallet, Building2, Bell, ChevronRight, Eye, Shield, AlertCircle
+  Wallet, Building2, Bell, ChevronRight, Eye, AlertCircle
 } from "lucide-react";
+import {
+  SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useUser, useAuth,
+} from '@clerk/clerk-react';
 
 import {
   getOverview, getTransactions, getTransaction,
-  getRefunds, getSettlements
+  getRefunds, getSettlements, setTokenGetter,
 } from "./api";
 
 const BRAND = {
@@ -28,7 +31,6 @@ const BRAND = {
 const TXN_STATUS = ["SUCCESS", "FAILED", "PENDING", "REFUNDED"];
 const METHODS = ["UPI", "CARD", "WALLET", "NETBANKING"];
 
-// ---------- Formatting helpers ----------
 const fmtINR = (n) =>
   "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -79,7 +81,6 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// ---------- Loading & error states ----------
 const LoadingSpinner = () => (
   <div style={{ padding: 60, textAlign: "center", color: BRAND.textMuted, fontSize: 13 }}>
     Loading...
@@ -96,7 +97,7 @@ const ErrorBox = ({ error, onRetry }) => (
       <div style={{ fontWeight: 600, marginBottom: 4 }}>Could not load data</div>
       <div style={{ fontSize: 12, opacity: 0.8 }}>{error.message}</div>
       <div style={{ fontSize: 11, marginTop: 8, opacity: 0.7 }}>
-        Make sure your backend is running at http://localhost:4000
+        Make sure your backend is running.
       </div>
       {onRetry && (
         <button onClick={onRetry} style={{
@@ -108,13 +109,8 @@ const ErrorBox = ({ error, onRetry }) => (
   </div>
 );
 
-// ---------- Login ----------
-function LoginScreen({ onLogin }) {
-  const [email, setEmail] = useState("demo@acc-merchants.in");
-  const [password, setPassword] = useState("demo123");
-  const [showOtp, setShowOtp] = useState(false);
-  const [otp, setOtp] = useState("");
-
+// ---------- Login (powered by Clerk) ----------
+function LoginScreen() {
   return (
     <div style={{
       minHeight: "100vh",
@@ -135,72 +131,51 @@ function LoginScreen({ onLogin }) {
           }}>
             <span style={{ color: "white", fontWeight: 800, fontSize: 22 }}>ACC</span>
           </div>
-          <h1 style={{ margin: 0, fontSize: 24, color: BRAND.text, fontWeight: 700 }}>{BRAND.name}</h1>
+          <h1 style={{ margin: 0, fontSize: 24, color: BRAND.text, fontWeight: 700 }}>
+            {BRAND.name}
+          </h1>
           <p style={{ color: BRAND.textMuted, fontSize: 13, marginTop: 6 }}>
-            Sign in to your merchant dashboard
+            Sign in or create your merchant account
           </p>
         </div>
 
-        {!showOtp ? (
-          <>
-            <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.text }}>Email / Merchant ID</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)}
-              style={{ width: "100%", padding: "11px 14px", marginTop: 6, marginBottom: 18,
-                border: `1px solid ${BRAND.border}`, borderRadius: 8, fontSize: 14,
-                boxSizing: "border-box", outline: "none" }} />
-            <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.text }}>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              style={{ width: "100%", padding: "11px 14px", marginTop: 6, marginBottom: 6,
-                border: `1px solid ${BRAND.border}`, borderRadius: 8, fontSize: 14,
-                boxSizing: "border-box", outline: "none" }} />
-            <div style={{ textAlign: "right", marginBottom: 20 }}>
-              <a href="#" style={{ fontSize: 12, color: BRAND.accent, textDecoration: "none" }}>Forgot password?</a>
-            </div>
-            <button onClick={() => setShowOtp(true)}
-              style={{ width: "100%", padding: "12px 14px", background: BRAND.primary,
-                color: "white", border: "none", borderRadius: 8, fontSize: 14,
-                fontWeight: 600, cursor: "pointer" }}>Continue</button>
-          </>
-        ) : (
-          <>
-            <div style={{ background: BRAND.accentSoft, padding: 12, borderRadius: 8,
-              marginBottom: 18, display: "flex", alignItems: "center", gap: 10 }}>
-              <Shield size={18} color={BRAND.accent} />
-              <div style={{ fontSize: 12, color: BRAND.text }}>
-                Enter the 6-digit OTP from your Authenticator app
-              </div>
-            </div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.text }}>6-digit OTP</label>
-            <input value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="000000"
-              style={{ width: "100%", padding: "11px 14px", marginTop: 6, marginBottom: 18,
-                border: `1px solid ${BRAND.border}`, borderRadius: 8, fontSize: 18,
-                boxSizing: "border-box", outline: "none", letterSpacing: 6,
-                textAlign: "center", fontWeight: 600 }} />
-            <button onClick={onLogin}
-              style={{ width: "100%", padding: "12px 14px", background: BRAND.primary,
-                color: "white", border: "none", borderRadius: 8, fontSize: 14,
-                fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>
-              Verify & Sign In
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <SignInButton mode="modal">
+            <button style={{
+              width: "100%", padding: "12px 14px", background: BRAND.primary,
+              color: "white", border: "none", borderRadius: 8, fontSize: 14,
+              fontWeight: 600, cursor: "pointer",
+            }}>
+              Sign In
             </button>
-            <button onClick={() => setShowOtp(false)}
-              style={{ width: "100%", padding: 10, background: "transparent",
-                color: BRAND.textMuted, border: "none", fontSize: 12, cursor: "pointer" }}>← Back</button>
-          </>
-        )}
+          </SignInButton>
 
-        <div style={{ marginTop: 28, paddingTop: 20, borderTop: `1px solid ${BRAND.border}`,
-          textAlign: "center", fontSize: 11, color: BRAND.textMuted }}>
-          Demo credentials pre-filled · Powered by {BRAND.tagline}
+          <SignUpButton mode="modal">
+            <button style={{
+              width: "100%", padding: "12px 14px", background: "white",
+              color: BRAND.primary, border: `1px solid ${BRAND.primary}`,
+              borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer",
+            }}>
+              Create Account
+            </button>
+          </SignUpButton>
+        </div>
+
+        <div style={{
+          marginTop: 28, paddingTop: 20, borderTop: `1px solid ${BRAND.border}`,
+          textAlign: "center", fontSize: 11, color: BRAND.textMuted,
+        }}>
+          Secure authentication · Powered by {BRAND.tagline}
         </div>
       </div>
     </div>
   );
 }
 
-// ---------- Sidebar & Topbar ----------
-function Sidebar({ current, onNavigate, onLogout }) {
+// ---------- Sidebar ----------
+function Sidebar({ current, onNavigate }) {
+  const { user } = useUser();
+
   const items = [
     { id: "home", label: "Overview", icon: LayoutDashboard },
     { id: "transactions", label: "Transactions", icon: Receipt },
@@ -210,59 +185,76 @@ function Sidebar({ current, onNavigate, onLogout }) {
     { id: "users", label: "Team", icon: Users },
     { id: "settings", label: "Settings", icon: Settings },
   ];
+
   return (
-    <aside style={{ width: 240, background: BRAND.primary, color: "white",
-      display: "flex", flexDirection: "column", flexShrink: 0 }}>
+    <aside style={{
+      width: 240, background: BRAND.primary, color: "white",
+      display: "flex", flexDirection: "column", flexShrink: 0
+    }}>
       <div style={{ padding: "22px 20px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 8,
+          <div style={{
+            width: 34, height: 34, borderRadius: 8,
             background: `linear-gradient(135deg, ${BRAND.accent}, #1D8E7F)`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 800, fontSize: 13 }}>ACC</div>
+            fontWeight: 800, fontSize: 13
+          }}>ACC</div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700 }}>{BRAND.name}</div>
             <div style={{ fontSize: 10, opacity: 0.6 }}>{BRAND.tagline}</div>
           </div>
         </div>
       </div>
+
       <nav style={{ flex: 1, padding: "16px 10px" }}>
         {items.map((it) => {
           const Icon = it.icon;
           const active = current === it.id;
           return (
             <button key={it.id} onClick={() => onNavigate(it.id)}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 12,
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 12,
                 padding: "10px 14px", marginBottom: 4, borderRadius: 8,
                 background: active ? "rgba(46,181,161,0.15)" : "transparent",
                 border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500,
-                color: active ? BRAND.accent : "rgba(255,255,255,0.75)", textAlign: "left" }}>
+                color: active ? BRAND.accent : "rgba(255,255,255,0.75)",
+                textAlign: "left"
+              }}>
               <Icon size={17} /> {it.label}
             </button>
           );
         })}
       </nav>
+
       <div style={{ padding: 14, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-        <div style={{ padding: 12, background: "rgba(255,255,255,0.06)",
-          borderRadius: 8, marginBottom: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Prat Sharma</div>
-          <div style={{ fontSize: 10, opacity: 0.6 }}>Merchant Admin</div>
+        <div style={{
+          padding: 12, background: "rgba(255,255,255,0.06)",
+          borderRadius: 8, display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <UserButton afterSignOutUrl="/" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 12, fontWeight: 600,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              {user?.fullName || user?.primaryEmailAddress?.emailAddress || 'User'}
+            </div>
+            <div style={{ fontSize: 10, opacity: 0.6 }}>Merchant Admin</div>
+          </div>
         </div>
-        <button onClick={onLogout}
-          style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 14px", background: "transparent", border: "none",
-            color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 12 }}>
-          <LogOut size={14} /> Sign out
-        </button>
       </div>
     </aside>
   );
 }
 
+// ---------- Topbar ----------
 function Topbar({ title }) {
   return (
-    <div style={{ padding: "18px 28px", background: "white",
+    <div style={{
+      padding: "18px 28px", background: "white",
       borderBottom: `1px solid ${BRAND.border}`, display: "flex",
-      alignItems: "center", justifyContent: "space-between" }}>
+      alignItems: "center", justifyContent: "space-between"
+    }}>
       <div>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: BRAND.text }}>{title}</h1>
         <div style={{ fontSize: 12, color: BRAND.textMuted, marginTop: 2 }}>
@@ -270,16 +262,16 @@ function Topbar({ title }) {
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <button style={{ background: "transparent", border: `1px solid ${BRAND.border}`,
-          padding: 8, borderRadius: 8, cursor: "pointer", position: "relative" }}>
+        <button style={{
+          background: "transparent", border: `1px solid ${BRAND.border}`,
+          padding: 8, borderRadius: 8, cursor: "pointer", position: "relative"
+        }}>
           <Bell size={16} color={BRAND.textMuted} />
-          <span style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8,
-            borderRadius: 4, background: BRAND.danger }} />
+          <span style={{
+            position: "absolute", top: 4, right: 4, width: 8, height: 8,
+            borderRadius: 4, background: BRAND.danger
+          }} />
         </button>
-        <div style={{ width: 36, height: 36, borderRadius: 18,
-          background: `linear-gradient(135deg, ${BRAND.accent}, ${BRAND.primary})`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: "white", fontWeight: 600, fontSize: 13 }}>PS</div>
       </div>
     </div>
   );
@@ -288,14 +280,18 @@ function Topbar({ title }) {
 // ---------- Stat Card ----------
 function StatCard({ label, value, trend, trendValue, accent }) {
   return (
-    <div style={{ background: "white", padding: 20, borderRadius: 12,
-      border: `1px solid ${BRAND.border}` }}>
+    <div style={{
+      background: "white", padding: 20, borderRadius: 12,
+      border: `1px solid ${BRAND.border}`
+    }}>
       <div style={{ fontSize: 12, color: BRAND.textMuted, fontWeight: 500 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 700, color: BRAND.text, marginTop: 6 }}>{value}</div>
       {trend && (
-        <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600,
+        <div style={{
+          marginTop: 8, fontSize: 12, fontWeight: 600,
           color: trend === "up" ? BRAND.success : BRAND.danger,
-          display: "flex", alignItems: "center", gap: 4 }}>
+          display: "flex", alignItems: "center", gap: 4
+        }}>
           {trend === "up" ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
           {trendValue}
         </div>
@@ -340,8 +336,7 @@ function OverviewScreen({ onTxnClick }) {
 
   return (
     <div style={{ padding: 28 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
-        gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
         <StatCard label="Today's Sales" value={fmtINRCompact(stats.todayTotal)}
           trend={trendDir} trendValue={`${Math.abs(trendPct)}% vs yesterday`} />
         <StatCard label="This Month" value={fmtINRCompact(stats.monthTotal)}
@@ -352,10 +347,8 @@ function OverviewScreen({ onTxnClick }) {
           trend={stats.failedCount > 10 ? "down" : "up"} trendValue="Needs review" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr",
-        gap: 16, marginBottom: 24 }}>
-        <div style={{ background: "white", padding: 20, borderRadius: 12,
-          border: `1px solid ${BRAND.border}` }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }}>
+        <div style={{ background: "white", padding: 20, borderRadius: 12, border: `1px solid ${BRAND.border}` }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Sales Trend</h3>
           <div style={{ fontSize: 11, color: BRAND.textMuted, marginTop: 2, marginBottom: 12 }}>Last 7 days</div>
           <ResponsiveContainer width="100%" height={240}>
@@ -445,7 +438,6 @@ function TransactionsScreen({ onTxnClick }) {
     finally { setLoading(false); }
   };
 
-  // Debounce the search — wait until user stops typing
   useEffect(() => {
     const timer = setTimeout(() => { load(); }, 300);
     return () => clearTimeout(timer);
@@ -737,11 +729,20 @@ function PlaceholderScreen({ title, description, icon: Icon }) {
 
 // ---------- Main App ----------
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
   const [page, setPage] = useState("home");
   const [selectedTxnId, setSelectedTxnId] = useState(null);
+  const { getToken } = useAuth();
 
-  if (!loggedIn) return <LoginScreen onLogin={() => setLoggedIn(true)} />;
+  // Tell api.js how to get the Clerk token — runs every time getToken changes
+  useEffect(() => {
+    setTokenGetter(async () => {
+      try {
+        return await getToken();
+      } catch {
+        return null;
+      }
+    });
+  }, [getToken]);
 
   const titles = {
     home: "Overview", transactions: "Transactions", refunds: "Refunds",
@@ -774,13 +775,26 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: BRAND.bg,
-      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: BRAND.text }}>
-      <Sidebar current={page} onNavigate={(p) => { setPage(p); setSelectedTxnId(null); }} onLogout={() => setLoggedIn(false)} />
-      <main style={{ flex: 1, overflow: "auto" }}>
-        <Topbar title={selectedTxnId ? "Transaction Detail" : titles[page]} />
-        {content}
-      </main>
-    </div>
+    <>
+      <SignedOut>
+        <LoginScreen />
+      </SignedOut>
+      <SignedIn>
+        <div style={{
+          display: "flex", minHeight: "100vh", background: BRAND.bg,
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          color: BRAND.text
+        }}>
+          <Sidebar
+            current={page}
+            onNavigate={(p) => { setPage(p); setSelectedTxnId(null); }}
+          />
+          <main style={{ flex: 1, overflow: "auto" }}>
+            <Topbar title={selectedTxnId ? "Transaction Detail" : titles[page]} />
+            {content}
+          </main>
+        </div>
+      </SignedIn>
+    </>
   );
 }
